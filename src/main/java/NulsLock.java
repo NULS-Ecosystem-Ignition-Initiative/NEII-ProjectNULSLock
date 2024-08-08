@@ -28,6 +28,11 @@ import static io.nuls.contract.sdk.Utils.require;
 * */
 public class NulsLock implements Contract{
 
+    /** 100 NULS
+     *   @dev Min required to deposit in aiNULS is 100 NULS
+     */
+    private static final BigInteger ONE_HUNDREAD_NULS = BigInteger.valueOf(10000000000L);
+
     //Contract where NULS are deposited
     public Address aiNULSDepositContract;
 
@@ -61,7 +66,7 @@ public class NulsLock implements Contract{
     }
 
     @View
-    public Address getUserBalance(Address addr){
+    public BigInteger getUserBalance(Address addr){
         if(userBalance.get(addr) == null)
             return BigInteger.ZERO;
         return userBalance.get(addr);
@@ -88,25 +93,36 @@ public class NulsLock implements Contract{
         if(userBalance.get(Msg.sender()) == null){
             userBalance.put(Msg.sender(), amount);
             //Add 2 years lock
-            userLockTime.put(Msg.sender(), Block.timestamp() +  (2 * 365 * 24 * 60 * 60));
+            userLockTime.put(Msg.sender(), BigInteger.valueOf(Block.timestamp() +  (2 * 365 * 24 * 60 * 60)));
         }else{
             userBalance.put(Msg.sender(), userBalance.get(Msg.sender()).add(amount));
             //Add 2 years lock
-            userLockTime.put(Msg.sender(), Block.timestamp() +  (2 * 365 * 24 * 60 * 60));
+            userLockTime.put(Msg.sender(), BigInteger.valueOf(Block.timestamp() +  (2 * 365 * 24 * 60 * 60)));
         }
 
-        String[][] args = new String[][]{new String[]{from.toString()}, new String[]{recipient.toString()}, new String[]{amount.toString()}};
-        aiNULSDepositContract.callWithReturnValue("deposit", "", args, amount);
+        BigInteger ctrBal= Msg.address().totalBalance();
+
+        if(ctrBal.compareTo(ONE_HUNDREAD_NULS) >= 0){
+            String[][] args = new String[][]{new String[]{ctrBal.toString()}};
+            aiNULSDepositContract.callWithReturnValue("stake", "", args, ctrBal);
+        }
 
     }
 
-    public void claimRewards(){
+    public void claimRewards(Address receiver){
 
         require(projectAdmin.get(Msg.sender()) != null && projectAdmin.get(Msg.sender()), "Invalid Admin");
 
-        String[][] args = new String[][]{new String[]{from.toString()}, new String[]{recipient.toString()}, new String[]{amount.toString()}};
-        aiNULSDepositContract.callWithReturnValue("withdraw", "", args, BigInteger.ZERO);
+        BigInteger stakedInAiNULS = getBalInContract(aiNULSDepositContract, Msg.address());
 
+        aiNULSDepositContract.callWithReturnValue("withdraw", "", null, BigInteger.ZERO);
+
+        String[][] args = new String[][]{new String[]{stakedInAiNULS.toString()}};
+        aiNULSDepositContract.callWithReturnValue("stake", "", args, stakedInAiNULS);
+
+        BigInteger balNow = Msg.address().totalBalance();
+
+        receiver.transfer(balNow);
 
     }
 
@@ -114,10 +130,26 @@ public class NulsLock implements Contract{
 
         require(projectAdmin.get(Msg.sender()) != null && projectAdmin.get(Msg.sender()), "Invalid Admin");
 
-        String[][] args = new String[][]{new String[]{from.toString()}, new String[]{recipient.toString()}, new String[]{amount.toString()}};
-        aiNULSDepositContract.callWithReturnValue("withdraw", "", args, BigInteger.ZERO);
+        //Require that user has funds to withdraw
+        if(userBalance.get(Msg.sender()) != null && userBalance.get(Msg.sender()).compareTo(BigInteger.ZERO) > 0){
 
+            BigInteger balToWithdraw = userBalance.get(Msg.sender());
 
+            BigInteger stakedInAiNULS = getBalInContract(aiNULSDepositContract, Msg.address());
+
+            if((stakedInAiNULS.subtract(balToWithdraw)).compareTo(BigInteger.ZERO) >= 0) {
+
+                aiNULSDepositContract.callWithReturnValue("withdraw", "", null, BigInteger.ZERO);
+
+                String[][] args = new String[][]{new String[]{stakedInAiNULS.toString()}};
+                aiNULSDepositContract.callWithReturnValue("stake", "", args, stakedInAiNULS.subtract(balToWithdraw));
+
+                userBalance.put(Msg.sender(), BigInteger.ZERO);
+            }
+
+        }else{
+            require(false, "No Amount Deposited");
+        }
     }
 
     public void addAdmin(Address newAdmin){
@@ -142,7 +174,7 @@ public class NulsLock implements Contract{
     /** FUNCTIONS */
 
     /**
-     * Get Manager
+     * Verify if Address is admin
      *
      * @return contract manager
      */
@@ -173,13 +205,6 @@ public class NulsLock implements Contract{
         return aiNULS;
     }
 
-
-
-
-
-
-
-
     private BigInteger getBalAINULS(@Required Address token, @Required Address owner){
         String[][] args = new String[][]{new String[]{owner.toString()}};
         BigInteger b = new BigInteger(token.callWithReturnValue("balanceOf", "", args, BigInteger.ZERO));
@@ -191,10 +216,6 @@ public class NulsLock implements Contract{
         BigInteger b = new BigInteger(token.callWithReturnValue("_balanceOf", "", args, BigInteger.ZERO));
         return b;
     }
-
-
-
-
 
 
     //--------------------------------------------------------------------
