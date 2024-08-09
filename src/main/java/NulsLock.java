@@ -33,11 +33,10 @@ public class NulsLock extends ReentrancyGuard implements Contract{
      *   @dev Min required to deposit in aiNULS is 100 NULS
      */
     private static final BigInteger ONE_HUNDREAD_NULS = BigInteger.valueOf(10000000000L);
+    private static final BigInteger TWO_YEARS         = BigInteger.valueOf(2 * 365 * 24 * 60 * 60);
 
-    //Contract where NULS are deposited
+    //Contract where NULS are deposited and AINULS Token Contract
     public Address aiNULSDepositContract;
-
-    //AINULS Token Contract
     public Address aiNULS;
 
     //Time the NULS will be locked
@@ -50,7 +49,7 @@ public class NulsLock extends ReentrancyGuard implements Contract{
     //User Balance
     public Map<Address, BigInteger> userBalance  = new HashMap<>();
     public Map<Address, BigInteger> userLockTime = new HashMap<>();
-    public Map<Address, Boolean> projectAdmin    = new HashMap<>();
+    public Map<Address, Boolean>    projectAdmin = new HashMap<>();
 
     //--------------------------------------------------------------------
     //Initialize Contract
@@ -65,6 +64,47 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
     }
 
+    /** VIEW FUNCTIONS */
+
+    /**
+     * @notice Get aiNULS Deposit Contract address
+     *
+     * @dev    Contract where nuls will be locked
+     *         and earn yield
+     * @return aiNULS Deposit Contract Address
+     */
+    @View
+    public Address getAINULSDepositCtrAddr() {
+        return aiNULSDepositContract;
+    }
+
+    /**
+     * @notice Get aiNULS asset address
+     *
+     * @return aiNULS Token Contract Address
+     */
+    @View
+    public Address getAINULSCtrAddr() {
+        return aiNULS;
+    }
+
+    /**
+     * @notice Verify if Address is admin
+     *
+     * @return true if it is admin, false if not
+     */
+    @View
+    public Boolean isAdmin(Address admin) {
+        if(projectAdmin.get(admin) == null)
+            return false;
+        return projectAdmin.get(admin);
+    }
+
+    /**
+     * @notice Get user balance deposited in lock
+     *
+     * @return User Balance
+     */
     @View
     public BigInteger getUserBalance(Address addr){
         if(userBalance.get(addr) == null)
@@ -72,27 +112,16 @@ public class NulsLock extends ReentrancyGuard implements Contract{
         return userBalance.get(addr);
     }
 
-    /** Essential to receive funds back from aiNULS
+    /**
+     * @notice Get user lock time ending
      *
-     * @dev DON'T REMOVE IT
+     * @return User lock time ending
      */
-    @Payable
-    public void _payable() {
-
-    }
-
-    public void onlyAdmin(){
-        require(projectAdmin.get(Msg.sender()) != null && projectAdmin.get(Msg.sender()), "Invalid Admin");
-    }
-
-    public void setPaused(){
-        onlyAdmin();
-        paused = true;
-    }
-
-    public void setUnpaused(){
-       onlyAdmin();
-        paused = false;
+    @View
+    public BigInteger getUserLockTime(Address addr){
+        if(userLockTime.get(addr) == null)
+            return BigInteger.ZERO;
+        return userLockTime.get(addr);
     }
 
     @View
@@ -100,38 +129,50 @@ public class NulsLock extends ReentrancyGuard implements Contract{
         return paused;
     }
 
+    /** MODIFIER FUNCTIONS */
+
+    public void onlyAdmin(){
+        require(projectAdmin.get(Msg.sender()) != null && projectAdmin.get(Msg.sender()), "Invalid Admin");
+    }
+
     public void notPaused(){
         require(!paused, "");
     }
+
+    /** MUTABLE NON-OWNER FUNCTIONS */
 
     /**
      * Deposit funds on Lock
      *
      * */
     @Payable
-    public void deposit(BigInteger amount) {
+    public void lockDeposit(@Required Address onBehalfOf, BigInteger amount) {
 
+        //Only allow locks when not paused
         notPaused();
 
+        //Prevent Reentrancy Attacks
         setEntrance();
 
+        //Require that nuls sent match the amount to lock
         require(Msg.value().compareTo(amount)  >= 0, "Invalid Amount sent");
 
-        if(userBalance.get(Msg.sender()) == null){
-            userBalance.put(Msg.sender(), amount);
-            //Add 2 years lock
-            userLockTime.put(Msg.sender(), BigInteger.valueOf(Block.timestamp() +  (2 * 365 * 24 * 60 * 60)));
+        if(userBalance.get(onBehalfOf) == null){
+
+            userBalance.put(onBehalfOf, amount);
+            extendUserLock(onBehalfOf, TWO_YEARS);
+
         }else{
-            userBalance.put(Msg.sender(), userBalance.get(Msg.sender()).add(amount));
-            //Add 2 years lock
-            userLockTime.put(Msg.sender(), BigInteger.valueOf(Block.timestamp() +  (2 * 365 * 24 * 60 * 60)));
+
+            userBalance.put(onBehalfOf, userBalance.get(onBehalfOf).add(amount));
+            extendUserLock(onBehalfOf, TWO_YEARS);
+
         }
 
         BigInteger ctrBal= Msg.address().totalBalance();
 
         if(ctrBal.compareTo(ONE_HUNDREAD_NULS) >= 0){
-            String[][] args = new String[][]{new String[]{ctrBal.toString()}};
-            aiNULSDepositContract.callWithReturnValue("stake", "", args, ctrBal);
+            stakeInAINULS(ctrBal);
         }
 
         setClosure();
@@ -144,9 +185,9 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
         setEntrance();
 
-        require(projectAdmin.get(Msg.sender()) != null && projectAdmin.get(Msg.sender()), "Invalid Admin");
+        onlyAdmin();
 
-        BigInteger stakedInAiNULS = getBalInContract(aiNULSDepositContract, Msg.address());
+        BigInteger stakedInAiNULS = getBalAINULS(Msg.address());
 
         withdrawInAINULS();
 
@@ -166,14 +207,12 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
         setEntrance();
 
-        require(projectAdmin.get(Msg.sender()) != null && projectAdmin.get(Msg.sender()), "Invalid Admin");
-
         //Require that user has funds to withdraw
         if(userBalance.get(Msg.sender()) != null && userBalance.get(Msg.sender()).compareTo(BigInteger.ZERO) > 0){
 
             BigInteger balToWithdraw = userBalance.get(Msg.sender());
 
-            BigInteger stakedInAiNULS = getBalInContract(aiNULSDepositContract, Msg.address());
+            BigInteger stakedInAiNULS = getBalAINULS(Msg.address());
 
             if((stakedInAiNULS.subtract(balToWithdraw)).compareTo(BigInteger.ZERO) >= 0) {
 
@@ -190,6 +229,9 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
         setClosure();
     }
+
+    //--------------------------------------------------------------------
+    /** MUTABLE OWNER FUNCTIONS */
 
     public void addAdmin(Address newAdmin){
 
@@ -208,40 +250,38 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
     }
 
+    public void setPaused(){
+        onlyAdmin();
+        paused = true;
+    }
+
+    public void setUnpaused(){
+        onlyAdmin();
+        paused = false;
+    }
+
 
     //--------------------------------------------------------------------
     /** FUNCTIONS */
 
-    /**
-     * Verify if Address is admin
+
+    /** Essential to receive funds back from aiNULS
      *
-     * @return contract manager
+     * @dev DON'T REMOVE IT
      */
-    @View
-    public Boolean isAdmin(Address admin) {
-        if(projectAdmin.get(admin) == null)
-            return false;
-        return projectAdmin.get(admin);
+    @Payable
+    public void _payable() {
+
     }
 
-    /**
-     * Get aiNULS Deposit Contract address
-     *
-     * @return All ALL
-     */
-    @View
-    public Address getAINULSDepositCtrAddr() {
-        return aiNULSDepositContract;
-    }
 
-    /**
-     * Get aiNULS asset address
-     *
-     * @return All ALL
-     */
-    @View
-    public Address getAINULSContractAddr() {
-        return aiNULS;
+
+    //--------------------------------------------------------------------
+    /** INTERNAL FUNCTIONS */
+
+
+    private void extendUserLock(Address onBehalfOf, BigInteger timeInSeconds){
+        userLockTime.put(onBehalfOf, BigInteger.valueOf(Block.timestamp()).add(timeInSeconds));
     }
 
     private void stakeInAINULS(@Required BigInteger amount){
@@ -253,9 +293,9 @@ public class NulsLock extends ReentrancyGuard implements Contract{
         aiNULSDepositContract.callWithReturnValue("withdraw", "", null, BigInteger.ZERO);
     }
 
-    private BigInteger getBalAINULS(@Required Address token, @Required Address owner){
+    private BigInteger getBalAINULS(@Required Address owner){
         String[][] args = new String[][]{new String[]{owner.toString()}};
-        BigInteger b = new BigInteger(token.callWithReturnValue("balanceOf", "", args, BigInteger.ZERO));
+        BigInteger b = new BigInteger(aiNULSDepositContract.callWithReturnValue("balanceOf", "", args, BigInteger.ZERO));
         return b;
     }
 
@@ -264,29 +304,6 @@ public class NulsLock extends ReentrancyGuard implements Contract{
         BigInteger b = new BigInteger(token.callWithReturnValue("_balanceOf", "", args, BigInteger.ZERO));
         return b;
     }
-
-
-    //--------------------------------------------------------------------
-    /** INTERNAL FUNCTIONS */
-
-
-    private void transferERC20(
-            Address _token,
-            Address _from,
-            Address _to,
-            BigInteger _amount
-    ){
-
-        if (_from.equals(Msg.address())) {
-            safeTransfer(_token,  _to, _amount);
-        } else {
-            safeTransferFrom(_token, _from, _to, _amount);
-        }
-    }
-
-    //--------------------------------------------------------------------
-    /** OWNER FUNCTIONS */
-
 
     private BigInteger safeBalanceOf(@Required Address token, @Required Address recipient){
         String[][] argsM = new String[][]{new String[]{recipient.toString()}};
@@ -308,5 +325,7 @@ public class NulsLock extends ReentrancyGuard implements Contract{
         boolean b = new Boolean(token.callWithReturnValue("transferFrom", "", args, BigInteger.ZERO));
         require(b, "NulswapLendingV1: Failed to transfer");
     }
+
+
 
 }
