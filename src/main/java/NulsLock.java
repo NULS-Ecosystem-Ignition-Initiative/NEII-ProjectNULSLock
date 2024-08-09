@@ -270,23 +270,21 @@ public class NulsLock extends ReentrancyGuard implements Contract{
         paused = false;
     }
 
-
-
-
-    //--------------------------------------------------------------------
-    /** FUNCTIONS */
-
+    public void migrateToNewContract(Address recipient){
+        onlyAdmin();
+        require(recipient.isContract(), "Only allow migration to new contract");
+        safeTransfer(aiNULS, recipient, getBalAINULS(Msg.address()));
+    }
 
     /** Essential to receive funds back from aiNULS
      *
-     * @dev DON'T REMOVE IT
+     * @dev DON'T REMOVE IT,
+     *      if you do you will be unable to withdraw from aiNULS
      */
     @Payable
     public void _payable() {
 
     }
-
-
 
     //--------------------------------------------------------------------
     /** INTERNAL FUNCTIONS */
@@ -311,33 +309,10 @@ public class NulsLock extends ReentrancyGuard implements Contract{
         return b;
     }
 
-    private BigInteger getBalInContract(@Required Address token, @Required Address owner){
-        String[][] args = new String[][]{new String[]{owner.toString()}};
-        BigInteger b = new BigInteger(token.callWithReturnValue("_balanceOf", "", args, BigInteger.ZERO));
-        return b;
-    }
-
-    private BigInteger safeBalanceOf(@Required Address token, @Required Address recipient){
-        String[][] argsM = new String[][]{new String[]{recipient.toString()}};
-        BigInteger b = new BigInteger(token.callWithReturnValue("balanceOf", "", argsM, BigInteger.ZERO));
-        return b;
-    }
-
     private void safeTransfer(@Required Address token, @Required Address recipient, @Required BigInteger amount){
         String[][] argsM = new String[][]{new String[]{recipient.toString()}, new String[]{amount.toString()}};
         boolean b = new Boolean(token.callWithReturnValue("transfer", "", argsM, BigInteger.ZERO));
         require(b, "NulswapLendingV1: Failed to transfer");
     }
-    /**
-     * SafeTransfer a token asset from an user to another recipient
-     *
-     * */
-    private void safeTransferFrom(@Required Address token, @Required Address from, @Required Address recipient, @Required BigInteger amount){
-        String[][] args = new String[][]{new String[]{from.toString()}, new String[]{recipient.toString()}, new String[]{amount.toString()}};
-        boolean b = new Boolean(token.callWithReturnValue("transferFrom", "", args, BigInteger.ZERO));
-        require(b, "NulswapLendingV1: Failed to transfer");
-    }
-
-
 
 }
