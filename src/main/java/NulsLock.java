@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import reentrancyguard.ReentrancyGuard;
 
 import static io.nuls.contract.sdk.Utils.emit;
 import static io.nuls.contract.sdk.Utils.require;
@@ -19,14 +20,14 @@ import static io.nuls.contract.sdk.Utils.require;
 
 /**
 * @notice Nuls Contract that locks the nuls deposited, returns
-* yield to aproject during an x period of time and
+* yield to a project during an x period of time and
 * returns nuls locked in the end of the period
 *
 * @dev Nuls are deposited in AINULS in order to receive yield
 *
 * Developed by Pedro G. S. Ferreira @Pedro_Ferreir_a
 * */
-public class NulsLock implements Contract{
+public class NulsLock extends ReentrancyGuard implements Contract{
 
     /** 100 NULS
      *   @dev Min required to deposit in aiNULS is 100 NULS
@@ -44,14 +45,14 @@ public class NulsLock implements Contract{
 
     // USE uint256 instead of bool to save gas
     // paused = 1 && active = 2
-    public int paused = 2;
+    public Boolean paused;
 
     public Address manager;
 
     //User Balance
     public Map<Address, BigInteger> userBalance  = new HashMap<>();
     public Map<Address, BigInteger> userLockTime = new HashMap<>();
-    public Map<Address, Boolean> projectAdmin = new HashMap<>();
+    public Map<Address, Boolean> projectAdmin    = new HashMap<>();
 
     //--------------------------------------------------------------------
     //Initialize Contract
@@ -61,6 +62,7 @@ public class NulsLock implements Contract{
         aiNULS                  = aiNULS_;
         lockTime                = lockTime_;
         projectAdmin.put(admin_, true);
+        paused = false;
 
 
     }
@@ -81,12 +83,35 @@ public class NulsLock implements Contract{
 
     }
 
+    public void setPaused(){
+        require(projectAdmin.get(Msg.sender()) != null && projectAdmin.get(Msg.sender()), "Invalid Admin");
+        paused = true;
+    }
+
+    public void setUnpaused(){
+        require(projectAdmin.get(Msg.sender()) != null && projectAdmin.get(Msg.sender()), "Invalid Admin");
+        paused = false;
+    }
+
+    @View
+    public Boolean isPaused(){
+        return paused;
+    }
+
+    public void notPaused(){
+        require(!paused, "");
+    }
+
     /**
      * Deposit funds on Lock
      *
      * */
     @Payable
     public void deposit(BigInteger amount) {
+
+        notPaused();
+
+        setEntrance();
 
         require(Msg.value().compareTo(amount)  >= 0, "Invalid Amount sent");
 
@@ -107,9 +132,15 @@ public class NulsLock implements Contract{
             aiNULSDepositContract.callWithReturnValue("stake", "", args, ctrBal);
         }
 
+        setClosure();
+
     }
 
     public void claimRewards(Address receiver){
+
+        notPaused();
+
+        setEntrance();
 
         require(projectAdmin.get(Msg.sender()) != null && projectAdmin.get(Msg.sender()), "Invalid Admin");
 
@@ -124,9 +155,15 @@ public class NulsLock implements Contract{
 
         receiver.transfer(balNow);
 
+        setClosure();
+
     }
 
     public void withdrawAfterLock(){
+
+        notPaused();
+
+        setEntrance();
 
         require(projectAdmin.get(Msg.sender()) != null && projectAdmin.get(Msg.sender()), "Invalid Admin");
 
@@ -150,6 +187,8 @@ public class NulsLock implements Contract{
         }else{
             require(false, "No Amount Deposited");
         }
+
+        setClosure();
     }
 
     public void addAdmin(Address newAdmin){
