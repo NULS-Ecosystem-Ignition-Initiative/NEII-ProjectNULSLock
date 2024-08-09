@@ -207,6 +207,11 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
         notPaused();
 
+        require(userLockTime.get(Msg.sender())!= null
+                && userLockTime.get(Msg.sender()).compareTo(BigInteger.valueOf(Block.timestamp())) <= 0,
+                "Lock still active"
+        );
+
         //Require that user has funds to withdraw
         if(userBalance.get(Msg.sender()) != null && userBalance.get(Msg.sender()).compareTo(BigInteger.ZERO) > 0){
 
