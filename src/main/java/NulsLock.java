@@ -148,11 +148,11 @@ public class NulsLock extends ReentrancyGuard implements Contract{
     @Payable
     public void lockDeposit(@Required Address onBehalfOf, BigInteger amount) {
 
-        //Only allow locks when not paused
-        notPaused();
-
         //Prevent Reentrancy Attacks
         setEntrance();
+
+        //Only allow locks when not paused
+        notPaused();
 
         //Require that nuls sent match the amount to lock
         require(Msg.value().compareTo(amount)  >= 0, "Invalid Amount sent");
@@ -181,9 +181,9 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
     public void claimRewards(Address receiver){
 
-        notPaused();
-
         setEntrance();
+
+        notPaused();
 
         onlyAdmin();
 
@@ -203,9 +203,9 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
     public void withdrawAfterLock(){
 
-        notPaused();
-
         setEntrance();
+
+        notPaused();
 
         //Require that user has funds to withdraw
         if(userBalance.get(Msg.sender()) != null && userBalance.get(Msg.sender()).compareTo(BigInteger.ZERO) > 0){
@@ -233,6 +233,16 @@ public class NulsLock extends ReentrancyGuard implements Contract{
     //--------------------------------------------------------------------
     /** MUTABLE OWNER FUNCTIONS */
 
+    public void setAiNULSDepositContract(Address newDepositCtr){
+        onlyAdmin();
+        aiNULSDepositContract = newDepositCtr;
+    }
+
+    public void setAiNULS(Address newAiNULS){
+        onlyAdmin();
+        aiNULS = newAiNULS;
+    }
+
     public void addAdmin(Address newAdmin){
 
         onlyAdmin();
@@ -259,6 +269,8 @@ public class NulsLock extends ReentrancyGuard implements Contract{
         onlyAdmin();
         paused = false;
     }
+
+
 
 
     //--------------------------------------------------------------------
