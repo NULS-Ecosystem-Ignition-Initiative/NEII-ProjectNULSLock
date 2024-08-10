@@ -39,12 +39,8 @@ public class NulsLock extends ReentrancyGuard implements Contract{
     public Address aiNULSDepositContract;
     public Address aiNULS;
 
-    //Time the NULS will be locked
-    public BigInteger lockTime;
-
     public Boolean paused;
 
-    public Address manager;
 
     //User Balance
     public Map<Address, BigInteger> userBalance  = new HashMap<>();
@@ -57,7 +53,6 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
         aiNULSDepositContract_  = aiNULSDepositContract_;
         aiNULS                  = aiNULS_;
-        lockTime                = lockTime_;
         projectAdmin.put(admin_, true);
         paused = false;
 
