@@ -49,7 +49,7 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
     //--------------------------------------------------------------------
     //Initialize Contract
-    public NulsLock(Address aiNULSDepositContract_, Address aiNULS_, BigInteger lockTime_, Address admin_) {
+    public NulsLock(Address aiNULSDepositContract_, Address aiNULS_, Address admin_) {
 
         aiNULSDepositContract_  = aiNULSDepositContract_;
         aiNULS                  = aiNULS_;
@@ -262,11 +262,13 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
     public void setPaused(){
         onlyAdmin();
+        require(!paused, "Already Paused");
         paused = true;
     }
 
     public void setUnpaused(){
         onlyAdmin();
+        require(paused, "Already Unpaused");
         paused = false;
     }
 
