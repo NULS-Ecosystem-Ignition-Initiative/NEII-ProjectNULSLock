@@ -33,7 +33,7 @@ public class NulsLock extends ReentrancyGuard implements Contract{
      *   @dev Min required to deposit in aiNULS is 100 NULS
      */
     private static final BigInteger ONE_HUNDREAD_NULS = BigInteger.valueOf(10000000000L);
-    private static final BigInteger TWO_YEARS         = BigInteger.valueOf(2 * 365 * 24 * 60 * 60);
+    private BigInteger LOCK_TIME                      = BigInteger.valueOf(2 * 365 * 24 * 60 * 60); // not static to be chhanged by admin
 
     //Contract where NULS are deposited and AINULS Token Contract
     public Address aiNULSDepositContract;
@@ -155,12 +155,12 @@ public class NulsLock extends ReentrancyGuard implements Contract{
         if(userBalance.get(onBehalfOf) == null){
 
             userBalance.put(onBehalfOf, amount);
-            extendUserLock(onBehalfOf, TWO_YEARS);
+            extendUserLock(onBehalfOf, LOCK_TIME);
 
         }else{
 
             userBalance.put(onBehalfOf, userBalance.get(onBehalfOf).add(amount));
-            extendUserLock(onBehalfOf, TWO_YEARS);
+            extendUserLock(onBehalfOf, LOCK_TIME);
 
         }
 
@@ -258,6 +258,11 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
         projectAdmin.put(removeAdmin, false);
 
+    }
+
+    public void setLOCK_TIME(@Required BigInteger newLockTime){
+        onlyAdmin();
+        LOCK_TIME = newLockTime;
     }
 
     public void setPaused(){
