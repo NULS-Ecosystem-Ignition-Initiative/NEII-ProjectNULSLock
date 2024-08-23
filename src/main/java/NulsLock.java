@@ -167,10 +167,11 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
         }
 
-        BigInteger ctrBal= Msg.address().totalBalance();
+        BigInteger ctrBal = Msg.address().totalBalance();
 
         if(ctrBal.compareTo(ONE_HUNDREAD_NULS) >= 0){
             stakeInAINULS(ctrBal);
+            inWaitingRooM = BigInteger.ZERO;
         }else{
             inWaitingRooM = ctrBal;
         }
