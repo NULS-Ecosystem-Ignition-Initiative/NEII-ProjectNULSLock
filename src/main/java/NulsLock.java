@@ -41,6 +41,8 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
     public Boolean paused;
 
+    public BigInteger inWaitingRooM;
+
 
     //User Balance
     public Map<Address, BigInteger> userBalance  = new HashMap<>();
@@ -49,10 +51,11 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
     //--------------------------------------------------------------------
     //Initialize Contract
-    public NulsLock(Address aiNULSDepositContract_, Address aiNULS_, Address admin_) {
+    public NulsLock(@Required Address aiNULSDepositContract_, @Required Address aiNULS_, @Required Address admin_) {
 
         aiNULSDepositContract_  = aiNULSDepositContract_;
         aiNULS                  = aiNULS_;
+        inWaitingRooM           = BigInteger.ZERO;
         projectAdmin.put(admin_, true);
         paused = false;
 
@@ -168,6 +171,8 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
         if(ctrBal.compareTo(ONE_HUNDREAD_NULS) >= 0){
             stakeInAINULS(ctrBal);
+        }else{
+            inWaitingRooM = ctrBal;
         }
 
         setClosure();
@@ -190,7 +195,9 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
         BigInteger balNow = Msg.address().totalBalance();
 
-        receiver.transfer(balNow);
+        if(balNow.subtract(inWaitingRooM).compareTo(BigInteger.ZERO) > 0){
+            receiver.transfer(balNow.subtract(inWaitingRooM));
+        }
 
         setClosure();
 
@@ -221,6 +228,8 @@ public class NulsLock extends ReentrancyGuard implements Contract{
                 stakeInAINULS(stakedInAiNULS.subtract(balToWithdraw));
 
                 userBalance.put(Msg.sender(), BigInteger.ZERO);
+
+                Msg.sender().transfer(balToWithdraw);
             }
 
         }else{
@@ -283,6 +292,12 @@ public class NulsLock extends ReentrancyGuard implements Contract{
         safeTransfer(aiNULS, recipient, getBalAINULS(Msg.address()));
     }
 
+    public void migrateToNewContractNuls(Address recipient){
+        onlyAdmin();
+        require(recipient.isContract(), "Only allow migration to new contract");
+        recipient.transfer(Msg.address().totalBalance());
+    }
+
     /** Essential to receive funds back from aiNULS
      *
      * @dev DON'T REMOVE IT,
@@ -312,7 +327,7 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
     private BigInteger getBalAINULS(@Required Address owner){
         String[][] args = new String[][]{new String[]{owner.toString()}};
-        BigInteger b = new BigInteger(aiNULSDepositContract.callWithReturnValue("balanceOf", "", args, BigInteger.ZERO));
+        BigInteger b = new BigInteger(aiNULS.callWithReturnValue("balanceOf", "", args, BigInteger.ZERO));
         return b;
     }
 
