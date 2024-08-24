@@ -188,10 +188,12 @@ public class NulsLock extends ReentrancyGuard implements Contract{
 
         onlyAdmin();
 
+        // Staked amoun in ainuls
         BigInteger stakedInAiNULS = getBalAINULS(Msg.address());
 
         withdrawInAINULS();
 
+        // Stake everything again to gain more rewards for future claims
         stakeInAINULS(stakedInAiNULS);
 
         BigInteger balNow = Msg.address().totalBalance();
@@ -297,6 +299,11 @@ public class NulsLock extends ReentrancyGuard implements Contract{
         onlyAdmin();
         require(recipient.isContract(), "Only allow migration to new contract");
         recipient.transfer(Msg.address().totalBalance());
+    }
+
+    public void setUserLock(@Required Address onBehalfOf, BigInteger timeInSeconds){
+        onlyAdmin();
+        userLockTime.put(onBehalfOf, timeInSeconds);
     }
 
     /** Essential to receive funds back from aiNULS
